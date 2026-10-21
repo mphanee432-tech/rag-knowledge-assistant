@@ -39,3 +39,37 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Next.js Build Outputs & Local Caches
+/.next/
+/out/
+.promptfoo/
+*.log
+
+# Environment Variables & API Secrets (CRITICAL)
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Python Bytecode & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Operating System & IDE Artifacts
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

@@ -1,0 +1,27 @@
+description: "RAG Knowledge Assistant - 50-Row Strict Citation Benchmark"
+
+evaluateOptions:
+  maxConcurrency: 1
+  delay: 8000 # 8-second pause between tests (~7.5 RPM) to eliminate rolling rate-limit dropouts
+
+providers:
+  - id: "http://127.0.0.1:3000/api/chat"
+    label: "prompt-v2-strict-citations"
+    config:
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+        x-eval-mode: "true"
+      body:
+        projectId: "{{projectId}}"
+        query: "{{query}}"
+        promptVariant: "strict"
+        stream: false
+      timeoutMs: 35000
+      transformResponse: "json.output || json.text || json.error"
+
+defaultTest:
+  options:
+    provider: "google:gemini-3.1-flash-lite"
+
+tests: "evals/golden_dataset.json"
