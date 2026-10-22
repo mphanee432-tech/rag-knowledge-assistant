@@ -1,0 +1,34 @@
+name: Ping Supabase DB
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every 3 days (Supabase pauses after 7 days of inactivity)
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Allows manual trigger from the Actions UI
+
+jobs:
+  ping-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Replace 'profiles' with any valid table name in your public schema
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "Response Status: $HTTP_STATUS"
+          
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Successfully pinged Supabase."
+            exit 0
+          else
+            echo "Ping failed with response: $HTTP_BODY"
+            exit 1
+          fi
