@@ -41,6 +41,7 @@ test("chat only persists and completes verified answers in JSON and SSE modes", 
     { name: "character limit", text: valid + "x".repeat(MAX_ANSWER_CHARS), ok: false },
     { name: "provider token limit", text: valid, finishReason: "MAX_TOKENS", ok: false },
     { name: "exact refusal", text: NO_EVIDENCE, ok: true },
+    { name: "cited refusal normalized", text: "I don\'t know [Chunk 1, Chunk 2].", expectedText: NO_EVIDENCE, ok: true },
     { name: "empty retrieval", text: NO_EVIDENCE, emptyRetrieval: true, ok: true },
     { name: "persistence failure", text: valid, persistError: true, ok: false },
     { name: "evaluation context uses a finish event", text: valid, evalStream: true, ok: true },
@@ -81,8 +82,8 @@ test("chat only persists and completes verified answers in JSON and SSE modes", 
                 assert.equal(init?.method, "POST")
                 assert.deepEqual(row, {
                   id: row.id, project_id: projectId, user_id: userId, query_text: "Question",
-                  retrieved_chunk_ids: scenario.emptyRetrieval ? [] : ["chunk-a", "chunk-b"],
-                  response_markdown: scenario.text, latency_ms: row.latency_ms,
+                  retrieved_chunk_ids: scenario.emptyRetrieval || scenario.expectedText === NO_EVIDENCE ? [] : ["chunk-a", "chunk-b"],
+                  response_markdown: scenario.expectedText ?? scenario.text, latency_ms: row.latency_ms,
                 })
                 assert.match(row.id, /^[0-9a-f-]{36}$/i)
                 assert.ok(Number.isInteger(row.latency_ms) && row.latency_ms >= 0)
@@ -130,7 +131,12 @@ test("chat only persists and completes verified answers in JSON and SSE modes", 
           assert.equal(events[0]?.type, "metadata")
           assert.equal(events.some(event => event.type === "finish"), scenario.ok)
           if (scenario.ok) {
-            assert.equal(events.filter(event => event.type === "text").map(event => event.text).join(""), scenario.text)
+            assert.equal(events.filter(event => event.type === "text").map(event => event.text).join(""), scenario.expectedText ?? scenario.text)
+            if (scenario.expectedText === NO_EVIDENCE) {
+              const finalMetadata = events.filter(event => event.type === "metadata").at(-1)
+              assert.ok(finalMetadata?.type === "metadata")
+              assert.deepEqual(finalMetadata.citations, [])
+            }
             const finish = events.find(event => event.type === "finish")
             assert.ok(finish?.type === "finish")
             assert.equal(typeof finish.metrics, "object")
@@ -149,14 +155,17 @@ test("chat only persists and completes verified answers in JSON and SSE modes", 
         } else {
           assert.equal(response.status, scenario.ok ? 200 : 500)
           const body = await response.json()
-          if (scenario.ok) assert.equal(body.text, scenario.text)
+          if (scenario.ok) {
+            assert.equal(body.text, scenario.expectedText ?? scenario.text)
+            if (scenario.expectedText === NO_EVIDENCE) assert.deepEqual(body.citations, [])
+          }
           else assert.equal(body.text, undefined)
         }
         assert.deepEqual(unexpected, [])
         assert.equal(authCalls, 1)
         assert.equal(projectChecks, 1)
         assert.equal(generations, scenario.emptyRetrieval ? 0 : 1)
-        assert.deepEqual(saved.map(row => row.response_markdown), scenario.ok ? [scenario.text] : [])
+        assert.deepEqual(saved.map(row => row.response_markdown), scenario.ok ? [scenario.expectedText ?? scenario.text] : [])
       })
     }
   }
