@@ -141,7 +141,8 @@ export async function POST(req: Request) {
     tokens: { prompt: 0, completion: 0, total: 0 },
   };
   const logTiming = (status: 'success' | 'error' | 'cancelled') => {
-    if (process.env.NODE_ENV !== 'development') return;
+    // In hosted previews, log only sanitized failure-stage diagnostics; never log prompts or evidence.
+    if (process.env.NODE_ENV !== 'development' && status === 'success') return;
     // Errors can contain provider or document data; only a controlled category is logged.
     const { errors, ...diagnostics } = telemetry;
     const record = { type: 'rag_timing', interaction_id: interactionId, status,
