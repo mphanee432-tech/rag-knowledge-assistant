@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION wp3_private.search_chunks(query_embedding extensions.
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog', 'pg_temp'
  SET row_security = on
-AS $
+AS $$
   with raw_eligible as materialized (
     select
       c.id,
