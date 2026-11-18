@@ -9,6 +9,21 @@ export function isNoEvidenceAnswer(text: string): boolean {
   const normalized = text.trim()
   return normalized === NO_EVIDENCE || normalized === ENTERPRISE_NO_EVIDENCE
 }
+// Normalize Personal RAG refusals whose generated citation markers do not actually support an answer.
+// Accept only a bare refusal plus optional well-formed Chunk markers; preserve substantive explanations.
+const PERSONAL_REFUSAL_WITH_OPTIONAL_CITATIONS =
+  /^I don['’]t know\.?(?:\s*\[Chunk\s+\d+(?:\s*,\s*(?:Chunk\s+)?\d+)*\])*\s*\.?$/i
+
+export function normalizePersonalRefusal(text: string): string {
+  return PERSONAL_REFUSAL_WITH_OPTIONAL_CITATIONS.test(text.trim()) ? NO_EVIDENCE : text
+}
+
+// Hold a potential refusal during SSE streaming so misleading citations never reach the UI.
+export function mayBePersonalRefusal(text: string): boolean {
+  const value = text.trimStart().toLowerCase()
+  return value.length > 0 && ("i don't know".startsWith(value) || /^i don['’]t know\b/.test(value))
+}
+
 export interface StreamCitation {
   id: string
   index: number
