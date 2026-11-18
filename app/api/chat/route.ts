@@ -149,7 +149,8 @@ export async function POST(req: Request) {
       ...diagnostics, ...failure, had_first_text: telemetry.model_first_text_ms !== null,
       elapsed_ms: performance.now() - reqStart,
       error_categories: status === 'success' && !errors.length ? [] : [status === 'cancelled' ? 'cancelled' : 'request_failed'] };
-    setImmediate(() => console.info(JSON.stringify(record)));
+    if (status === 'success') setImmediate(() => console.info(JSON.stringify(record)));
+    else console.error(JSON.stringify(record));
   };
 
   try {
