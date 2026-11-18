@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm"
 import { Bot, User, Check, Copy, AlertCircle, FileText } from "lucide-react"
 import { CitationBadge } from "@/components/chat/citation-badge"
 import { splitCitations } from "@/lib/citations"
+import { isNoEvidenceAnswer, normalizePersonalRefusal } from "@/lib/chat-contract"
 import { MessageActions } from "@/components/chat/message-actions"
 import type { ChatMessage, Citation } from "@/lib/store/chat-store"
 
@@ -21,10 +22,10 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
   const isUser = message.role === "user"
   const displayContent = !isUser && !isStreaming && !message.content.trim()
     ? "Error: The answer could not be completed. Please retry."
-    : message.content
+    : !isUser ? normalizePersonalRefusal(message.content) : message.content
   const isError = !isUser && /^Error:/i.test(displayContent.trim())
-  const isRefusal = !isError && displayContent.includes(REFUSAL_PREFIX)
-  const citations = message.citations || []
+  const isRefusal = !isError && (displayContent.includes(REFUSAL_PREFIX) || isNoEvidenceAnswer(displayContent))
+  const citations = isRefusal ? [] : (message.citations || [])
 
   return (
     <div
