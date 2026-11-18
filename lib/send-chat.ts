@@ -1,5 +1,5 @@
 "use client"
-import { ENTERPRISE_NO_EVIDENCE, readChatStream } from "@/lib/chat-contract"
+import { ENTERPRISE_NO_EVIDENCE, NO_EVIDENCE, normalizePersonalRefusal, readChatStream } from "@/lib/chat-contract"
 import { useChatStore, type Citation } from "@/lib/store/chat-store"
 
 export async function sendChat(query: string, projectId: string | null | undefined, organizationId?: string) {
@@ -44,6 +44,10 @@ export async function sendChat(query: string, projectId: string | null | undefin
     })
     if (!text.trim()) {
       throw new Error("The answer could not be completed. Please retry.")
+    }
+    if (!organizationId) {
+      text = normalizePersonalRefusal(text)
+      if (text === NO_EVIDENCE) citations = []
     }
     update()
   } catch (error) {
