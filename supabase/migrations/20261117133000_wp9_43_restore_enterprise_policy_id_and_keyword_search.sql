@@ -66,6 +66,9 @@ AS $$
     cross join requested_policies rp
     where target_organization_id is null
       or rp.ids is null
+      -- Preserve authorized legacy/D12 chunks without a policy opening marker.
+      -- Visibility is still enforced by document_chunks RLS before this filter.
+      or e.policy_id is null
       or e.policy_id = any(rp.ids)
   ),
   terms as (
