@@ -79,7 +79,7 @@ export function MessageItem({ message, isStreaming = false }: MessageItemProps) 
           </div>
 
           {/* Citation Tray if citations exist */}
-          {!isUser && citations.length > 0 && (
+          {!isUser && !isStreaming && citations.length > 0 && (
             <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1">
                 <FileText className="size-3" />
