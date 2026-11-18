@@ -11,7 +11,13 @@ create schema vault;
 create schema cron;
 create schema net;
 create extension vector with schema extensions;
-create table auth.users(id uuid primary key, email text);
+-- Keep the disposable Auth stub aligned with the columns used by signup migrations.
+create table auth.users(
+  id uuid primary key,
+  email text,
+  email_confirmed_at timestamptz,
+  raw_user_meta_data jsonb
+);
 create function auth.uid() returns uuid language sql as $$
   select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
     nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid
