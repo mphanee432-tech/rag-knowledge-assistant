@@ -477,7 +477,7 @@ export async function POST(req: Request) {
         };
         let succeeded = false;
         try {
-          if (!enterprise) send({ type: 'metadata', interactionId, citations: [] });
+          if (!enterprise) send({ type: 'metadata', interactionId, citations });
           let text = '';
           let emittedLength = 0;
           let finishReason = 'stop';
@@ -542,8 +542,10 @@ export async function POST(req: Request) {
           }
           await finalizeAnswer(text, finishReason, signal);
           const fallbackQuestions = await fallbackQuestionsFor(text, signal);
-          // Publish only answer-supporting citations, after the final response is validated and saved.
-          send({ type: 'metadata', ...(!enterprise ? { interactionId } : {}), citations });
+          // Correct the initial candidate metadata only when a generated refusal removes all evidence.
+          if (enterprise || (!enterprise && isNoEvidenceAnswer(text) && relevantChunks.length > 0)) {
+            send({ type: 'metadata', ...(!enterprise ? { interactionId } : {}), citations });
+          }
           if (text.length > emittedLength) send({ type: 'text', text: text.slice(emittedLength) });
           if (!cancelled) telemetry.server_finish_ready_ms = performance.now() - reqStart;
           send({ type: 'finish', metrics: telemetry,
