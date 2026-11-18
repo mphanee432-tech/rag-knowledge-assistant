@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { assertValidAnswer, encodeEvent, MAX_ANSWER_CHARS, NO_EVIDENCE, readChatStream, validCitations, type ChatEvent } from "../lib/chat-contract"
+import { assertValidAnswer, encodeEvent, MAX_ANSWER_CHARS, NO_EVIDENCE, normalizePersonalRefusal, mayBePersonalRefusal, readChatStream, validCitations, type ChatEvent } from "../lib/chat-contract"
 
 test("SSE parser survives split UTF-8 and frames without leaking metadata into text", async () => {
   const events: ChatEvent[] = [
@@ -63,3 +63,28 @@ test("only complete, bounded answers with valid references or an exact refusal p
   }
 })
 
+
+test("Personal RAG refuses without citation markers while preserving grounded negative explanations", () => {
+  for (const candidate of [
+    "I don't know.",
+    "I don't know [Chunk 1].",
+    "I don't know [Chunk 1, Chunk 2, Chunk 3].",
+    "I don't know [Chunk 1] [Chunk 2].",
+    "I DON’T KNOW [Chunk 8].",
+  ]) {
+    assert.equal(normalizePersonalRefusal(candidate), NO_EVIDENCE, candidate)
+  }
+  for (const supportedOrInvalid of [
+    "I don't know why this happened [Chunk 1].",
+    "I don't know, because policy excludes this case [Chunk 1].",
+    "I don't know [Chunk banana].",
+    "I don't know [Chunk 1] plus a factual claim.",
+    "The policy does not establish a leave entitlement [Chunk 1].",
+  ]) {
+    assert.equal(normalizePersonalRefusal(supportedOrInvalid), supportedOrInvalid)
+  }
+  for (const fragment of ["I", "I don", "I don't know", "I don't know [Chunk 1"] ) {
+    assert.equal(mayBePersonalRefusal(fragment), true, fragment)
+  }
+  assert.equal(mayBePersonalRefusal("The answer is [Chunk 1]."), false)
+})

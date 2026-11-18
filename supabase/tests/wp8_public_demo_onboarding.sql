@@ -15,7 +15,8 @@ $$;
 
 do $$
 declare
-  org uuid := gen_random_uuid();
+  -- Public onboarding targets the seeded DeccanBridge organization ID, not a random organization.
+  org uuid := 'c0000000-0000-4000-8000-000000000001'::uuid;
   foreign_org uuid := gen_random_uuid();
   eng_dept uuid := gen_random_uuid();
   hr_dept uuid := gen_random_uuid();

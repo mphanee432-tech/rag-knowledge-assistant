@@ -47,6 +47,34 @@ function response(events: ChatEvent[]) {
   }}), { headers: { "Content-Type": "text/event-stream" } })
 }
 
+test("Personal refusal does not expose unrelated source chips, even with legacy bad metadata", async t => {
+  const previous = useChatStore.getState()
+  t.after(() => useChatStore.setState(previous, true))
+  const store = useChatStore.getState()
+  store.setActiveProject(projectId)
+  t.mock.method(globalThis, "fetch", async () => response([
+    { type: "metadata", interactionId: "personal-refusal-1", citations },
+    { type: "text", text: "I don't know [Chunk 1]." },
+    { type: "metadata", interactionId: "personal-refusal-1", citations: [] },
+    { type: "finish", metrics: {} },
+  ]))
+  await sendChat("Unknown HR policy", projectId)
+  const assistant = useChatStore.getState().messages.at(-1)!
+  assert.equal(assistant.content, "I don't know.")
+  assert.deepEqual(assistant.citations, [])
+  assert.equal(assistant.interactionId, "personal-refusal-1")
+  const html = renderToStaticMarkup(createElement(MessageItem, { message: assistant }))
+  assert.ok(html.includes("I don&#x27;t know.") || html.includes("I don&#39;t know.") || html.includes("I don&#x27;t know"))
+  assert.ok(!html.includes("Sources:"))
+  assert.ok(!html.includes("private-citation-excerpt"))
+  const legacyHtml = renderToStaticMarkup(createElement(MessageItem, {
+    message: { ...assistant, content: "I don't know [Chunk 1].", citations },
+  }))
+  assert.ok(!legacyHtml.includes("Sources:"))
+  assert.ok(!legacyHtml.includes("Chunk #1"))
+  assert.ok(!legacyHtml.includes("private-citation-excerpt"))
+})
+
 test("enterprise chat sends an organization request without previous evidence or a project", async t => {
   const initial = useChatStore.getState()
   t.after(() => useChatStore.setState(initial, true))

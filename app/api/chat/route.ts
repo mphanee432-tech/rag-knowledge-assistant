@@ -3,7 +3,7 @@ import { APICallError, streamText, generateText, type LanguageModelUsage } from 
 import { GoogleGenAI } from '@google/genai';
 import { getEnterpriseCopilotContext, HttpError, isJiraAccessAvailable, requireChatProject, requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { assertValidAnswer, encodeEvent, ENTERPRISE_NO_EVIDENCE, isNoEvidenceAnswer, NO_EVIDENCE, MAX_ANSWER_CHARS, type ChatEvent } from '@/lib/chat-contract';
+import { assertValidAnswer, encodeEvent, ENTERPRISE_NO_EVIDENCE, isNoEvidenceAnswer, mayBePersonalRefusal, normalizePersonalRefusal, NO_EVIDENCE, MAX_ANSWER_CHARS, type ChatEvent } from '@/lib/chat-contract';
 import { getSystemPrompt } from '@/lib/prompts/systemPrompt';
 
 import {
@@ -141,14 +141,16 @@ export async function POST(req: Request) {
     tokens: { prompt: 0, completion: 0, total: 0 },
   };
   const logTiming = (status: 'success' | 'error' | 'cancelled') => {
-    if (process.env.NODE_ENV !== 'development') return;
+    // In hosted previews, log only sanitized failure-stage diagnostics; never log prompts or evidence.
+    if (process.env.NODE_ENV !== 'development' && status === 'success') return;
     // Errors can contain provider or document data; only a controlled category is logged.
     const { errors, ...diagnostics } = telemetry;
     const record = { type: 'rag_timing', interaction_id: interactionId, status,
       ...diagnostics, ...failure, had_first_text: telemetry.model_first_text_ms !== null,
       elapsed_ms: performance.now() - reqStart,
       error_categories: status === 'success' && !errors.length ? [] : [status === 'cancelled' ? 'cancelled' : 'request_failed'] };
-    setImmediate(() => console.info(JSON.stringify(record)));
+    if (status === 'success') setImmediate(() => console.info(JSON.stringify(record)));
+    else console.error(JSON.stringify(record));
   };
 
   try {
@@ -396,7 +398,7 @@ export async function POST(req: Request) {
           Promise.resolve(createAdminClient(enterprise ? 'enterprise' : 'personal').from('interactions').insert({
             id: interactionId, project_id: projectId.trim(), query_text: userQuery,
             user_id: user.id,
-            retrieved_chunk_ids: relevantChunks.map((c) => c.id),
+            retrieved_chunk_ids: !enterprise && isNoEvidenceAnswer(text) ? [] : relevantChunks.map((c) => c.id),
             response_markdown: text, latency_ms: telemetry.total_ms,
           }).abortSignal(writeAbort.signal).retry(false)),
           cancellation,
@@ -443,6 +445,10 @@ export async function POST(req: Request) {
         updateUsage(result.usage);
       }
       text = await prepareEnterpriseAnswer(text, finishReason, req.signal);
+      if (!enterprise) {
+        text = normalizePersonalRefusal(text);
+        if (isNoEvidenceAnswer(text)) citations = [];
+      }
       await finalizeAnswer(text, finishReason);
       const fallbackQuestions = await fallbackQuestionsFor(text, req.signal);
       logTiming('success');
@@ -514,7 +520,7 @@ export async function POST(req: Request) {
                 telemetry.model_first_text_ms = firstText - modelStart;
               }
               text += delta;
-              if (!enterprise) {
+              if (!enterprise && !mayBePersonalRefusal(text)) {
                 const publishable = safeCitationPrefix(text, citations);
                 if (publishable.length > emittedLength) {
                   send({ type: 'text', text: publishable.slice(emittedLength) });
@@ -530,9 +536,16 @@ export async function POST(req: Request) {
           }
           const signal = AbortSignal.any([req.signal, streamAbort.signal]);
           text = await prepareEnterpriseAnswer(text, finishReason, signal);
+          if (!enterprise) {
+            text = normalizePersonalRefusal(text);
+            if (isNoEvidenceAnswer(text)) citations = [];
+          }
           await finalizeAnswer(text, finishReason, signal);
           const fallbackQuestions = await fallbackQuestionsFor(text, signal);
-          if (enterprise) send({ type: 'metadata', citations });
+          // Correct the initial candidate metadata only when a generated refusal removes all evidence.
+          if (enterprise || (!enterprise && isNoEvidenceAnswer(text) && relevantChunks.length > 0)) {
+            send({ type: 'metadata', ...(!enterprise ? { interactionId } : {}), citations });
+          }
           if (text.length > emittedLength) send({ type: 'text', text: text.slice(emittedLength) });
           if (!cancelled) telemetry.server_finish_ready_ms = performance.now() - reqStart;
           send({ type: 'finish', metrics: telemetry,

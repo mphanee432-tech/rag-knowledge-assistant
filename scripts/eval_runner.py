@@ -455,9 +455,10 @@ def evaluate_query(
     auth.get_token()
     t0 = time.perf_counter()
     retries = {"embedding": 0, "retrieval": 0, "generation": 0, "request": 0}
+    attempt_errors = []
     for attempt in range(2):
-        # Judge the final attempt; earlier failures are already counted as retries.
-        errors = []
+        # Retain failed attempts even when a later request succeeds.
+        errors = list(attempt_errors)
         trace_errors = set()
         response_valid = False
         embed_ms = retrieval_ms = ttft_ms = total_ms = 0.0
@@ -589,7 +590,8 @@ def evaluate_query(
         except EvaluationAuthError:
             raise
         except Exception as error:
-            errors.append(str(error))
+            attempt_errors.append(str(error))
+            errors = list(attempt_errors)
             total_ms = (time.perf_counter() - t0) * 1000
             if attempt == 0:
                 retries["request"] += 1
