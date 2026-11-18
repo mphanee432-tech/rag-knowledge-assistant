@@ -1,3 +1,27 @@
+begin;
+
+-- WP9.43: restore Enterprise policy-ID opening and keyword retrieval without changing Personal RAG behavior.
+-- SECURITY DEFINER uses the non-BYPASSRLS wp3_retrieval owner and enables row security.
+CREATE OR REPLACE FUNCTION wp3_private.search_chunks(query_embedding extensions.vector, query_text text, target_project_id uuid, target_organization_id uuid)
+ RETURNS TABLE(id uuid, content text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+ SET row_security = on
+AS $
+  with raw_eligible as materialized (
+    select
+      c.id,
+      c.document_id,
+      c.content,
+      c.embedding,
+      c.fts,
+      case
+        when target_organization_id is not null
+          and left(c.content, 800) ~* '(DOCUMENT CONTROL|Policy introduction and control|Classification\s*(/|:))'
+        then upper((regexp_match(left(c.content, 300), '\m(D(?:0[1-9]|1[0-2]))\M', 'i'))[1])
+        else null
+      end as opening_policy_id
     from public.document_chunks c
     where (c.project_id = target_project_id
       or c.project_id in (select wp3_private.organization_projects(target_organization_id)))
